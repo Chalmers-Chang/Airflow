@@ -3,7 +3,7 @@
 ## GOTCHA
 
 - Docker bind-mount of iCloud Drive can raise `OSError: [Errno 5] Input/output error` when hashing/parsing a cloud-only PDF. Treat that file as unread: keep the previous sha256 so it is not “removed”; retry new unread files next run. Do not fail the whole task.
-- Docker cannot materialize iCloud files. `dd` of a dataless PDF can exit 0 with 0 bytes; detect with `sha256sum` (EIO). Host `brctl download` / `open -g` downloads; Cursor’s shell often cannot `listdir` `Mobile Documents` (TCC). List/probe via `airflow-worker`, download on the Mac. LaunchAgent: `scripts/materialize_icloud.sh install`.
+- Docker cannot materialize iCloud files. `dd` of a dataless PDF can exit 0 with 0 bytes; detect with `sha256sum` (EIO). Task SSHs to `host.docker.internal` and runs `scripts/materialize_icloud.sh` (10s × 18, then exit). No LaunchAgent. Remote Login was **off** (port 22 refused, no sshd) on 2026-08-30; enable it then `scripts/setup_host_ssh.sh`. Docker Desktop paused also blocks worker SSH tests.
 - Empty `IMPORT_APPLE_CALENDAR_DRY_RUN` used to be treated as write (`!= "1"`). Treat only `"0"` as write; empty stays dry-run. `ICLOUD_CALDAV_PASSWORD` must be filled in the UI before `"0"`.
 - Do **not** enable Public Calendar. Owner CalDAV + Calendar.app sharing is enough for Mac / iPhone / invited people.
 - Apple ID login password will not work. Use an **app-specific password**. The Variable is `ICLOUD_CALDAV_PASSWORD`.

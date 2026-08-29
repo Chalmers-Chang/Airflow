@@ -4,5 +4,6 @@ example/
 scripts/
 run_state.py
 calendar_client.py
+host_materialize.py
 __pycache__/
 MEMORY.md

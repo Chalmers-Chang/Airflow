@@ -1,5 +1,5 @@
 #!/bin/bash
-# Run on the Mac host. Docker cannot ask iCloud to download cloud-only files.
+# Mac host only. One-shot: download unread iCloud PDFs, wait 10s × 18, then exit.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -8,108 +8,119 @@ COMPOSE_DIR="$REPO_ROOT/airflow.deployment/docker-compose"
 CONTAINER_ROOT="/opt/airflow/icloud"
 LABEL="com.chalmers.airflow.materialize-icloud"
 AGENT_PLIST="${HOME}/Library/LaunchAgents/${LABEL}.plist"
+WAIT_SEC=10
+WAIT_TIMES=18
 
 if [ -z "${ICLOUD_AIRFLOW_DIR:-}" ] && [ -f "$COMPOSE_DIR/.env" ]; then
   ICLOUD_AIRFLOW_DIR="$(grep '^ICLOUD_AIRFLOW_DIR=' "$COMPOSE_DIR/.env" | cut -d= -f2-)"
 fi
 HOST_ROOT="${ICLOUD_AIRFLOW_DIR:-$HOME/Library/Mobile Documents/com~apple~CloudDocs/airflow}"
 
-install_agent() {
-  mkdir -p "${HOME}/Library/LaunchAgents"
-  cat >"$AGENT_PLIST" <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>${LABEL}</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/bin/bash</string>
-    <string>${SCRIPT_DIR}/materialize_icloud.sh</string>
-  </array>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>PATH</key>
-    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
-    <key>ICLOUD_AIRFLOW_DIR</key>
-    <string>${HOST_ROOT}</string>
-  </dict>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>StartInterval</key>
-  <integer>120</integer>
-  <key>StandardOutPath</key>
-  <string>${REPO_ROOT}/dags/logs/import_apple_calendar/materialize_icloud.log</string>
-  <key>StandardErrorPath</key>
-  <string>${REPO_ROOT}/dags/logs/import_apple_calendar/materialize_icloud.log</string>
-</dict>
-</plist>
-EOF
-  mkdir -p "$REPO_ROOT/dags/logs/import_apple_calendar"
+uninstall_agent() {
   launchctl bootout "gui/$(id -u)" "$AGENT_PLIST" 2>/dev/null || true
-  launchctl bootstrap "gui/$(id -u)" "$AGENT_PLIST"
-  echo "installed $AGENT_PLIST (every 120s)"
+  launchctl bootout "gui/$(id -u)/${LABEL}" 2>/dev/null || true
+  rm -f "$AGENT_PLIST"
+  echo "removed LaunchAgent $LABEL"
+}
+
+host_path() {
+  local p="$1"
+  case "$p" in
+    "$CONTAINER_ROOT"/*) echo "$HOST_ROOT/${p#"$CONTAINER_ROOT"/}" ;;
+    /*) echo "$p" ;;
+    *) echo "$HOST_ROOT/$p" ;;
+  esac
+}
+
+container_path() {
+  local p="$1"
+  case "$p" in
+    "$CONTAINER_ROOT"/*) echo "$p" ;;
+    "$HOST_ROOT"/*) echo "$CONTAINER_ROOT/${p#"$HOST_ROOT"/}" ;;
+    *) echo "$CONTAINER_ROOT/$p" ;;
+  esac
+}
+
+worker_cid() {
+  docker compose -f "$COMPOSE_DIR/docker-compose.yaml" --project-directory "$COMPOSE_DIR" ps -q airflow-worker 2>/dev/null || true
 }
 
 readable_in_docker() {
   local cid="$1" cpath="$2"
-  docker exec "$cid" sha256sum "$cpath" >/dev/null 2>&1
+  [ -n "$cid" ] && docker exec "$cid" sha256sum "$cpath" >/dev/null 2>&1
 }
 
 materialize() {
   local hpath="$1"
   brctl download "$hpath" 2>/dev/null || true
-  if [ ! -e "$hpath" ] || [[ "$hpath" == *.icloud ]]; then
-    open -g "$hpath" 2>/dev/null || true
+  open -g "$hpath" 2>/dev/null || true
+}
+
+collect_targets() {
+  local cid="$1"
+  if [ "$#" -gt 1 ]; then
+    shift
+    printf '%s\n' "$@"
     return
   fi
+  docker exec "$cid" find "$CONTAINER_ROOT" \( -name '*.pdf' -o -name '*.icloud' \) -print
 }
 
 run() {
-  brctl download "$HOST_ROOT" 2>/dev/null || true
-
-  local cid=""
-  if [ -f "$COMPOSE_DIR/docker-compose.yaml" ]; then
-    cid="$(docker compose -f "$COMPOSE_DIR/docker-compose.yaml" --project-directory "$COMPOSE_DIR" ps -q airflow-worker 2>/dev/null || true)"
-  fi
+  local cid
+  cid="$(worker_cid)"
   if [ -z "$cid" ]; then
-    echo "airflow-worker not running; asked iCloud to download $HOST_ROOT"
+    echo "airflow-worker not running"
+    return 1
+  fi
+
+  local -a targets=()
+  local line
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    targets+=("$line")
+  done < <(collect_targets "$cid" "$@")
+
+  if [ "${#targets[@]}" -eq 0 ]; then
+    echo "no pdf targets"
     return 0
   fi
 
-  local cpath rel hpath i
-  while IFS= read -r cpath; do
-    [ -n "$cpath" ] || continue
-    rel="${cpath#"$CONTAINER_ROOT"/}"
-    hpath="$HOST_ROOT/$rel"
-    if [[ "$cpath" != *.icloud ]] && readable_in_docker "$cid" "$cpath"; then
-      continue
-    fi
-    echo "downloading $rel"
-    materialize "$hpath"
-    if [[ "$cpath" == *.icloud ]]; then
-      hpath="${hpath%.icloud}"
-      cpath="${cpath%.icloud}"
-      materialize "$hpath"
-    fi
-    for i in 1 2 3 4 5 6; do
-      if readable_in_docker "$cid" "$cpath"; then
-        echo "ready $rel"
-        break
+  brctl download "$HOST_ROOT" 2>/dev/null || true
+
+  local n cpath hpath pending
+  for n in $(seq 1 "$WAIT_TIMES"); do
+    pending=0
+    for cpath in "${targets[@]}"; do
+      cpath="$(container_path "$cpath")"
+      if [[ "$cpath" == *.icloud ]]; then
+        hpath="$(host_path "$cpath")"
+        materialize "$hpath"
+        materialize "${hpath%.icloud}"
+        cpath="${cpath%.icloud}"
       fi
-      sleep 5
+      if readable_in_docker "$cid" "$cpath"; then
+        continue
+      fi
+      pending=1
+      hpath="$(host_path "$cpath")"
+      echo "downloading ${cpath#"$CONTAINER_ROOT"/} (try $n/$WAIT_TIMES)"
+      materialize "$hpath"
     done
-    if ! readable_in_docker "$cid" "$cpath"; then
-      open -g "$hpath" 2>/dev/null || true
-      echo "still cloud-only (retry next run): $rel"
+    if [ "$pending" -eq 0 ]; then
+      echo "ready"
+      return 0
     fi
-  done < <(docker exec "$cid" find "$CONTAINER_ROOT" \( -name '*.pdf' -o -name '*.icloud' \) -print)
+    if [ "$n" -lt "$WAIT_TIMES" ]; then
+      sleep "$WAIT_SEC"
+    fi
+  done
+  echo "still cloud-only after ${WAIT_TIMES}×${WAIT_SEC}s"
+  return 1
 }
 
-if [ "${1:-}" = "install" ]; then
-  install_agent
-  run
+if [ "${1:-}" = "uninstall" ]; then
+  uninstall_agent
 else
-  run
+  run "$@"
 fi

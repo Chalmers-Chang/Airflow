@@ -34,6 +34,7 @@ def snapshot_files(paths, stored_files=None):
             continue
         sha256 = try_file_sha256(path)
         if sha256 is None:
+            unread_new.append(path)
             stored = stored_by_name.get(name)
             if stored:
                 snapshot.append(
@@ -43,8 +44,6 @@ def snapshot_files(paths, stored_files=None):
                         "path": path,
                     }
                 )
-            else:
-                unread_new.append(name)
             continue
         snapshot.append({"name": name, "sha256": sha256, "path": path})
     return snapshot, unread_new

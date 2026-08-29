@@ -15,6 +15,7 @@ from airflow.utils.dates import days_ago
 from common.variables import ensure_all_project_variables
 from config import appsetting
 from calendar_client import upsert_events
+from host_materialize import request_materialize
 from parsers import parse_file
 from run_state import (
     changed_and_removed,
@@ -56,10 +57,24 @@ def _import_source(source, dry_run):
     password_variable = source.get("password_variable") or appsetting.PASSWORD_VARIABLE
     password = Variable.get(password_variable, default_var="")
     files = sorted(glob.glob(os.path.join(scan_dir, pattern)))
+    icloud_stubs = sorted(glob.glob(os.path.join(scan_dir, "*.icloud")))
     state = load_state(source_id)
-    snapshot, unread_new = snapshot_files(files, state.get("files"))
-    if unread_new:
-        LOGGER.warning("source %s: unread new files (retry next run): %s", source_id, unread_new)
+    snapshot, unread = snapshot_files(files, state.get("files"))
+    if unread or icloud_stubs:
+        LOGGER.info(
+            "source %s: cloud-only files, SSH materialize: %s",
+            source_id,
+            [os.path.basename(path) for path in unread + icloud_stubs],
+        )
+        request_materialize(unread + icloud_stubs)
+        files = sorted(glob.glob(os.path.join(scan_dir, pattern)))
+        snapshot, unread = snapshot_files(files, state.get("files"))
+        if unread:
+            LOGGER.warning(
+                "source %s: still unread after materialize (skip this run): %s",
+                source_id,
+                [os.path.basename(path) for path in unread],
+            )
     changed, removed = changed_and_removed(snapshot, state.get("files"))
     if not changed and not removed:
         LOGGER.info("source %s: file names/hashes unchanged, skip", source_id)
