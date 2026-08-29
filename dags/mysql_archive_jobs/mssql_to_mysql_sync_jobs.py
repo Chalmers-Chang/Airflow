@@ -9,6 +9,8 @@ from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
 from airflow.utils.trigger_rule import TriggerRule
 
+from common.variables import ensure_all_project_variables
+
 import general.toolbox as tb
 from classes.sync_config import SyncConfig
 from config import appsetting
@@ -30,6 +32,8 @@ from sql.mssql.stored_procedure import generate_query_sql_statement_by_config
 2025-03-04@Chalmers: Added ETL_type = 2, query by timestamp
 ======================================================================
 """
+
+ensure_all_project_variables()
 
 is_poc = Variable.get("is_poc")
 is_config_table_updated = Variable.get("is_config_table_updated")

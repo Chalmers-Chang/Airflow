@@ -221,6 +221,7 @@ __marimo__/
 /logs/
 /plugins/
 /config/airflow.cfg
+dags/logs/
 
 # Sensitive data
 dags/secrets/

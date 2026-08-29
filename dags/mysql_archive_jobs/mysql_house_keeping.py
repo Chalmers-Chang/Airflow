@@ -5,6 +5,7 @@ import pandas as pd
 from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.empty import EmptyOperator
+from common.variables import ensure_all_project_variables
 from airflow.operators.python import BranchPythonOperator, PythonOperator
 from airflow.utils.dates import days_ago
 from airflow.utils.task_group import TaskGroup
@@ -361,6 +362,8 @@ def decide_optimization():
     else:
         return "skip_optimization_stage"
 
+
+ensure_all_project_variables()
 
 airflow_task_id = Variable.get("airflow_task_id")
 is_optimization_active = int(Variable.get("is_optimization_active"))

@@ -72,7 +72,7 @@ House keeping forces `proxy = None` on POC. PROD uses `db_config.proxy`. The oth
 
 ## Airflow Variables
 
-DAGs read Variables at **import** time. Parse fails if they are missing.
+DAG parse creates any **missing** keys with defaults (`dags/common/variables.py`) and never overwrites values you already set. Fill them in the UI.
 
 | Variable | Used by | Meaning |
 |---|---|---|
