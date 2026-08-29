@@ -1,0 +1,7 @@
+classes/
+config/
+general/
+slack/
+sql/
+__pycache__/
+**/__pycache__/

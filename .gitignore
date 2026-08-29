@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local Airflow docker-compose runtime
+/logs/
+/plugins/
+/config/airflow.cfg

@@ -1,0 +1,16 @@
+[
+    {
+        "target_db": "target_db",
+        "target_table": "target_table",
+        "column_name": "column_name_timestamp",
+        "original_data_type": "timestamp",
+        "covert_data_type": "bigint"
+    },
+    {
+        "target_db": "target_db",
+        "target_table": "target_table",
+        "column_name": "column_name_boolean",
+        "original_data_type": "Boolean",
+        "covert_data_type": "bit"
+    }
+]
