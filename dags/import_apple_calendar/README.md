@@ -26,7 +26,7 @@ v1 scans Britney’s iCloud Drive folder via `/opt/airflow/icloud` (compose `ICL
    - Host: `/Users/chalmerschang/Library/Mobile Documents/com~apple~CloudDocs/airflow`
    - Container: `/opt/airflow/icloud` (read-only). Britney’s PDFs: `/opt/airflow/icloud/data/britney.duty.schedule`
    - Add another person’s folder under `airflow/data/` and a new `sources[]` row; no extra mount needed
-   - Cloud-only `.icloud` stubs fail until opened/downloaded on the Mac
+   - Cloud-only files: Docker cannot download them. On this Mac, `scripts/materialize_icloud.sh` (LaunchAgent every 2 min) asks iCloud to materialize PDFs the worker cannot hash. One-shot: `./scripts/materialize_icloud.sh`. Install: `./scripts/materialize_icloud.sh install`.
 
 ## `source_config.json`
 
@@ -58,14 +58,15 @@ import_apple_calendar/
 │   ├── source_config.json     # per-person scan path + calendar name
 │   └── secret.py              # Variable name only; no real passwords
 ├── parsers/crew_report.py     # crew-report PDF
+├── scripts/materialize_icloud.sh  # Mac host: download cloud-only PDFs
 └── example/                   # sample PDFs for local test
 ```
 
-`.airflowignore` hides `config/`, `parsers/`, `example/`. The DAG file stays at this folder’s root.
+`.airflowignore` hides `config/`, `parsers/`, `example/`, `scripts/`. The DAG file stays at this folder’s root.
 
 Written event UIDs are stored in `dags/logs/import_apple_calendar/{source_id}.json` with `crew_id` and `month`. Only **changed or new files** are processed. Delete is limited to that file’s **Crew ID + months present in the PDF** (from `dags/logs`, no calendar scan). Uploading August after September does **not** remove September. Unchanged files are left alone; if nothing changed, the run exits immediately.
 
-If Docker cannot read an iCloud PDF (`Input/output error`, file still cloud-only), that file is skipped this run and retried in 5 minutes. Already-imported files are not treated as deleted. Open the PDF once on the Mac so iCloud downloads it.
+If Docker cannot read an iCloud PDF (`Input/output error`, file still cloud-only), that file is skipped this run and retried in 5 minutes. Already-imported files are not treated as deleted. The Mac host script / LaunchAgent downloads those files; Docker never talks to `bird`.
 
 Schedule is every 5 minutes UTC (`*/5 * * * *`). `max_active_runs=1`.
 

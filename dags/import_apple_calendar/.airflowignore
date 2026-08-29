@@ -1,6 +1,7 @@
 config/
 parsers/
 example/
+scripts/
 run_state.py
 calendar_client.py
 __pycache__/
