@@ -2,6 +2,7 @@
 
 ## GOTCHA
 
+- Docker bind-mount of iCloud Drive can raise `OSError: [Errno 5] Input/output error` when hashing/parsing a cloud-only PDF. Treat that file as unread: keep the previous sha256 so it is not “removed”; retry new unread files next run. Do not fail the whole task.
 - Empty `IMPORT_APPLE_CALENDAR_DRY_RUN` used to be treated as write (`!= "1"`). Treat only `"0"` as write; empty stays dry-run. `ICLOUD_CALDAV_PASSWORD` must be filled in the UI before `"0"`.
 - Do **not** enable Public Calendar. Owner CalDAV + Calendar.app sharing is enough for Mac / iPhone / invited people.
 - Apple ID login password will not work. Use an **app-specific password**. The Variable is `ICLOUD_CALDAV_PASSWORD`.

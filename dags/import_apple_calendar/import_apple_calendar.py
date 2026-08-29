@@ -56,8 +56,10 @@ def _import_source(source, dry_run):
     password_variable = source.get("password_variable") or appsetting.PASSWORD_VARIABLE
     password = Variable.get(password_variable, default_var="")
     files = sorted(glob.glob(os.path.join(scan_dir, pattern)))
-    snapshot = snapshot_files(files)
     state = load_state(source_id)
+    snapshot, unread_new = snapshot_files(files, state.get("files"))
+    if unread_new:
+        LOGGER.warning("source %s: unread new files (retry next run): %s", source_id, unread_new)
     changed, removed = changed_and_removed(snapshot, state.get("files"))
     if not changed and not removed:
         LOGGER.info("source %s: file names/hashes unchanged, skip", source_id)
@@ -93,7 +95,11 @@ def _import_source(source, dry_run):
         files_state.pop(name, None)
 
     for item in changed:
-        parsed = parse_file(parser_name, item["path"], source)
+        try:
+            parsed = parse_file(parser_name, item["path"], source)
+        except OSError as exc:
+            LOGGER.warning("skip parse %s (%s); retry next run", item["name"], exc)
+            continue
         crew_id = (parsed.get("crew") or {}).get("crew_id") or ""
         months = months_from_dates(parsed.get("coverage_dates") or [])
         uids = uids_for_crew_months(events_state, crew_id, months)

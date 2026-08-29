@@ -65,6 +65,8 @@ import_apple_calendar/
 
 Written event UIDs are stored in `dags/logs/import_apple_calendar/{source_id}.json` with `crew_id` and `month`. Only **changed or new files** are processed. Delete is limited to that file’s **Crew ID + months present in the PDF** (from `dags/logs`, no calendar scan). Uploading August after September does **not** remove September. Unchanged files are left alone; if nothing changed, the run exits immediately.
 
+If Docker cannot read an iCloud PDF (`Input/output error`, file still cloud-only), that file is skipped this run and retried in 5 minutes. Already-imported files are not treated as deleted. Open the PDF once on the Mac so iCloud downloads it.
+
 Schedule is every 5 minutes UTC (`*/5 * * * *`). `max_active_runs=1`.
 
 ## Run

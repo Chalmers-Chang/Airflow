@@ -1,8 +1,11 @@
 import hashlib
 import json
+import logging
 import os
 
 from config import appsetting
+
+LOGGER = logging.getLogger(__name__)
 
 
 def file_sha256(path):
@@ -13,15 +16,38 @@ def file_sha256(path):
     return digest.hexdigest()
 
 
-def snapshot_files(paths):
-    return [
-        {
-            "name": os.path.basename(path),
-            "sha256": file_sha256(path),
-            "path": path,
-        }
-        for path in paths
-    ]
+def try_file_sha256(path):
+    try:
+        return file_sha256(path)
+    except OSError as exc:
+        LOGGER.warning("cannot read %s (%s); iCloud file may still be cloud-only", path, exc)
+        return None
+
+
+def snapshot_files(paths, stored_files=None):
+    stored_by_name = {item.get("name"): item for item in stored_files or []}
+    snapshot = []
+    unread_new = []
+    for path in paths:
+        name = os.path.basename(path)
+        if name.endswith(".icloud"):
+            continue
+        sha256 = try_file_sha256(path)
+        if sha256 is None:
+            stored = stored_by_name.get(name)
+            if stored:
+                snapshot.append(
+                    {
+                        "name": name,
+                        "sha256": stored.get("sha256"),
+                        "path": path,
+                    }
+                )
+            else:
+                unread_new.append(name)
+            continue
+        snapshot.append({"name": name, "sha256": sha256, "path": path})
+    return snapshot, unread_new
 
 
 def months_from_dates(dates):
