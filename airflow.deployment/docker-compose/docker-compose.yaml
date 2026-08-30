@@ -48,6 +48,10 @@
 #
 # Feel free to modify this file to suit your needs.
 ---
+# Project name in Docker Desktop (must be lowercase). Without this, the folder
+# name "docker-compose" is used.
+name: airflow
+
 x-airflow-common:
   &airflow-common
   # In order to add custom dependencies or upgrade provider packages you can use your extended image.
