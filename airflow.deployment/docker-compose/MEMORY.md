@@ -2,7 +2,8 @@
 
 ## GOTCHA
 
-- Missing `.env` / empty `ICLOUD_AIRFLOW_DIR` → `invalid spec: :/opt/airflow/icloud:ro: empty section between colons` on `docker compose up|down`. Always `cp .env.example .env` and set `ICLOUD_AIRFLOW_DIR`, `AIRFLOW_UID`, and `IMPORT_APPLE_CALENDAR_SSH_*`.
+- Missing `.env` / empty `ICLOUD_AIRFLOW_DIR` → `invalid spec: :/opt/airflow/icloud:ro: empty section between colons` on `docker compose up|down`. Always `cp .env.example .env` and set `ICLOUD_AIRFLOW_DIR`, `AIRFLOW_UID`, `AIRFLOW_DATA_DIR`, and `IMPORT_APPLE_CALENDAR_SSH_*`.
+- Host `/opt/data/...` is not shared by Docker Desktop by default (`Mounts denied`). Prefer `AIRFLOW_DATA_DIR` under `$HOME` (example uses `~/Library/Application Support/airflow`); container always sees `/opt/data/airflow`.
 - Official `apache/airflow:2.10.5-python3.8` does not include `pypdf` / `caldav` / `icalendar`. `import_apple_calendar` will fail to parse until those extras are installed (`_PIP_ADDITIONAL_REQUIREMENTS` or a custom image).
 - `_PIP_ADDITIONAL_REQUIREMENTS` reinstalls on every container start. Fine for local; use a Dockerfile for anything longer-lived.
 - Do not put `apache-airflow` in compose `requirements.txt`.

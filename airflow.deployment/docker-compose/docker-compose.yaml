@@ -30,6 +30,8 @@
 # AIRFLOW_PROJ_DIR             - Base path to which all the files will be volumed.
 #                                Default: .
 # ICLOUD_AIRFLOW_DIR           - Host iCloud Drive folder mounted read-only at /opt/airflow/icloud.
+# AIRFLOW_DATA_DIR             - Host path for persistent local data; mounted at /opt/data/airflow
+#                                Default (Docker Desktop-friendly): ~/Library/Application Support/airflow
 # IMPORT_APPLE_CALENDAR_SSH_USER              - macOS username for worker → host SSH materialize
 # IMPORT_APPLE_CALENDAR_MATERIALIZE_SCRIPT    - Absolute host path to materialize_icloud.sh
 # IMPORT_APPLE_CALENDAR_SSH_HOST              - Default: host.docker.internal
@@ -81,6 +83,8 @@ x-airflow-common:
     IMPORT_APPLE_CALENDAR_SSH_USER: ${IMPORT_APPLE_CALENDAR_SSH_USER:-}
     IMPORT_APPLE_CALENDAR_SSH_HOST: ${IMPORT_APPLE_CALENDAR_SSH_HOST:-host.docker.internal}
     IMPORT_APPLE_CALENDAR_MATERIALIZE_SCRIPT: ${IMPORT_APPLE_CALENDAR_MATERIALIZE_SCRIPT:-}
+    # Persistent machine-local data: host path from .env → fixed /opt/data/airflow in container
+    AIRFLOW_DATA_DIR: /opt/data/airflow
     # The following line can be used to set a custom config file, stored in the local config folder
     # If you want to use it, outcomment it and replace airflow.cfg with the name of your config file
     # AIRFLOW_CONFIG: '/opt/airflow/config/airflow.cfg'
@@ -89,6 +93,7 @@ x-airflow-common:
     - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
     - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
+    - ${AIRFLOW_DATA_DIR:-${HOME}/.airflow-data}:/opt/data/airflow
     - ${ICLOUD_AIRFLOW_DIR}:/opt/airflow/icloud:ro
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on:

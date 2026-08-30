@@ -1,5 +1,6 @@
 import logging
 import os
+import shlex
 import subprocess
 
 from config import appsetting
@@ -31,6 +32,11 @@ def request_materialize(container_paths):
         )
         return False
     os.makedirs(appsetting.ssh_dir(), exist_ok=True)
+    # ssh joins argv into one remote shell string — quote paths that contain spaces
+    remote = " ".join(
+        [shlex.quote(appsetting.HOST_MATERIALIZE_SCRIPT)]
+        + [shlex.quote(path) for path in paths]
+    )
     command = [
         "ssh",
         "-i",
@@ -46,9 +52,8 @@ def request_materialize(container_paths):
         "-o",
         "UserKnownHostsFile={0}".format(appsetting.ssh_known_hosts_path()),
         "{0}@{1}".format(appsetting.HOST_SSH_USER, appsetting.HOST_SSH_HOST),
-        appsetting.HOST_MATERIALIZE_SCRIPT,
+        remote,
     ]
-    command.extend(paths)
     LOGGER.info("SSH materialize %s", [os.path.basename(path) for path in paths])
     try:
         completed = subprocess.run(

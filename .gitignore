@@ -10,8 +10,11 @@
 .envrc
 # Keep templates: .env.example is tracked under airflow.deployment/docker-compose/
 
-# Per-machine calendar source list (may contain Apple ID email)
+# Per-machine calendar source list was moved to AIRFLOW_DATA_DIR (default /opt/data/airflow).
+# Keep ignoring a leftover copy under the package if someone still creates one.
 dags/import_apple_calendar/config/source_config.json
+
+# Machine-local data dir is outside the repo (/opt/data/airflow); do not put secrets in-repo.
 
 # Airflow / DAG runtime state, SSH keys for host materialize
 /logs/
