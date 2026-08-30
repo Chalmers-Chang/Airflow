@@ -1,4 +1,3 @@
-import hashlib
 import json
 import logging
 import os
@@ -8,20 +7,22 @@ from config import appsetting
 LOGGER = logging.getLogger(__name__)
 
 
-def file_sha256(path):
-    digest = hashlib.sha256()
-    with open(path, "rb") as handle:
-        for chunk in iter(lambda: handle.read(65536), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def try_file_sha256(path):
+def try_file_mtime(path):
     try:
-        return file_sha256(path)
+        return os.stat(path).st_mtime
+    except OSError as exc:
+        LOGGER.warning("cannot stat %s (%s); iCloud file may still be cloud-only", path, exc)
+        return None
+
+
+def try_file_readable(path):
+    try:
+        with open(path, "rb") as handle:
+            handle.read(1)
+        return True
     except OSError as exc:
         LOGGER.warning("cannot read %s (%s); iCloud file may still be cloud-only", path, exc)
-        return None
+        return False
 
 
 def snapshot_files(paths, stored_files=None):
@@ -32,20 +33,20 @@ def snapshot_files(paths, stored_files=None):
         name = os.path.basename(path)
         if name.endswith(".icloud"):
             continue
-        sha256 = try_file_sha256(path)
-        if sha256 is None:
+        mtime = try_file_mtime(path)
+        if mtime is None or not try_file_readable(path):
             unread_new.append(path)
             stored = stored_by_name.get(name)
             if stored:
                 snapshot.append(
                     {
                         "name": name,
-                        "sha256": stored.get("sha256"),
+                        "mtime": stored.get("mtime"),
                         "path": path,
                     }
                 )
             continue
-        snapshot.append({"name": name, "sha256": sha256, "path": path})
+        snapshot.append({"name": name, "mtime": mtime, "path": path})
     return snapshot, unread_new
 
 
@@ -58,10 +59,10 @@ def months_from_dates(dates):
     return months
 
 
-def file_entry(name, sha256, crew_id, months):
+def file_entry(name, mtime, crew_id, months):
     return {
         "name": name,
-        "sha256": sha256,
+        "mtime": mtime,
         "crew_id": crew_id or "",
         "months": list(months or []),
     }
@@ -73,7 +74,7 @@ def changed_and_removed(current_snapshot, stored_files):
     changed = [
         item
         for item in current_snapshot or []
-        if stored_by_name.get(item["name"], {}).get("sha256") != item["sha256"]
+        if stored_by_name.get(item["name"], {}).get("mtime") != item["mtime"]
     ]
     removed = [
         item

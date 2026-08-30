@@ -21,12 +21,13 @@ ICLOUD_CALDAV_URL = "https://caldav.icloud.com/"
 DAGS_DIR = os.path.dirname(PACKAGE_DIR)
 STATE_DIR = os.path.join(DAGS_DIR, "logs", "import_apple_calendar")
 
-HOST_SSH_USER = os.environ.get("IMPORT_APPLE_CALENDAR_SSH_USER", "chalmerschang")
-HOST_SSH_HOST = os.environ.get("IMPORT_APPLE_CALENDAR_SSH_HOST", "host.docker.internal")
-HOST_MATERIALIZE_SCRIPT = os.environ.get(
-    "IMPORT_APPLE_CALENDAR_MATERIALIZE_SCRIPT",
-    "/Users/chalmerschang/Repo/Airflow/dags/import_apple_calendar/scripts/materialize_icloud.sh",
-)
+# Mac host username and absolute path to materialize_icloud.sh (SSH runs on the host).
+# Set both in airflow.deployment/docker-compose/.env (see .env.example). No machine-specific defaults.
+HOST_SSH_USER = (os.environ.get("IMPORT_APPLE_CALENDAR_SSH_USER") or "").strip()
+HOST_SSH_HOST = (os.environ.get("IMPORT_APPLE_CALENDAR_SSH_HOST") or "host.docker.internal").strip()
+HOST_MATERIALIZE_SCRIPT = (
+    os.environ.get("IMPORT_APPLE_CALENDAR_MATERIALIZE_SCRIPT") or ""
+).strip()
 MATERIALIZE_WAIT_SEC = 10
 MATERIALIZE_WAIT_TIMES = 18
 MATERIALIZE_SSH_TIMEOUT = MATERIALIZE_WAIT_SEC * MATERIALIZE_WAIT_TIMES + 20
@@ -37,7 +38,14 @@ def source_config_path():
 
 
 def load_source_config():
-    with open(source_config_path(), "r", encoding="utf-8") as handle:
+    path = source_config_path()
+    if not os.path.isfile(path):
+        example = os.path.join(CONFIG_DIR, "source_config.json.example")
+        raise FileNotFoundError(
+            "Missing {0}. Copy {1} to source_config.json and fill in your Apple ID email "
+            "and calendar settings.".format(path, example)
+        )
+    with open(path, "r", encoding="utf-8") as handle:
         return json.load(handle)
 
 

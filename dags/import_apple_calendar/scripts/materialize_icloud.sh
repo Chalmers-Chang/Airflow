@@ -10,6 +10,9 @@ LABEL="com.chalmers.airflow.materialize-icloud"
 AGENT_PLIST="${HOME}/Library/LaunchAgents/${LABEL}.plist"
 WAIT_SEC=10
 WAIT_TIMES=18
+# SSH BatchMode sessions get a minimal PATH (/usr/bin:/bin:...); Docker Desktop
+# installs to /usr/local/bin or /opt/homebrew/bin.
+export PATH="/usr/local/bin:/opt/homebrew/bin:${PATH:-/usr/bin:/bin:/usr/sbin:/sbin}"
 
 if [ -z "${ICLOUD_AIRFLOW_DIR:-}" ] && [ -f "$COMPOSE_DIR/.env" ]; then
   ICLOUD_AIRFLOW_DIR="$(grep '^ICLOUD_AIRFLOW_DIR=' "$COMPOSE_DIR/.env" | cut -d= -f2-)"
@@ -42,7 +45,8 @@ container_path() {
 }
 
 worker_cid() {
-  docker compose -f "$COMPOSE_DIR/docker-compose.yaml" --project-directory "$COMPOSE_DIR" ps -q airflow-worker 2>/dev/null || true
+  # Multiple replicas → take one container for readability checks.
+  docker compose -f "$COMPOSE_DIR/docker-compose.yaml" --project-directory "$COMPOSE_DIR" ps -q airflow-worker 2>/dev/null | head -n 1 || true
 }
 
 readable_in_docker() {

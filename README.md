@@ -20,30 +20,34 @@ Local package pins live in `pyproject.toml` + `uv.lock` ([uv](https://docs.astra
 
 ## Deploy (Docker Compose, this Mac)
 
-1. Install and start **Docker Desktop**. Give it at least 4 GB RAM, 2 CPUs, 10 GB disk (Airflow’s official local floor).
-2. In `airflow.deployment/docker-compose/.env`:
-   - `AIRFLOW_IMAGE_NAME=apache/airflow:2.10.5-python3.8`
-   - `AIRFLOW_PROJ_DIR=../..` (repo root: `dags/`, `logs/`, `config/`, `plugins/`)
-   - `AIRFLOW_UID` = your host uid (`id -u`; `501` on this Mac) so `logs/` is not owned by root
-   - `ICLOUD_AIRFLOW_DIR` = host iCloud `airflow` folder (needed by `import_apple_calendar`)
-3. From the compose directory:
+1. Install and start **Docker Desktop**. Give it at least 4 GB RAM, 2 CPUs, 10 GB disk (Airflow’s official local floor). Keep it **unpaused**.
+2. Create `airflow.deployment/docker-compose/.env` from the template:
 
 ```bash
 cd airflow.deployment/docker-compose
+cp .env.example .env
+```
+
+   Edit at least:
+   - `AIRFLOW_UID` = `id -u` (often `501` on macOS)
+   - `ICLOUD_AIRFLOW_DIR` = host iCloud `airflow` folder
+   - `IMPORT_APPLE_CALENDAR_SSH_USER` / `IMPORT_APPLE_CALENDAR_MATERIALIZE_SCRIPT` (for cloud-only PDF download)
+3. From the compose directory:
+
+```bash
 docker compose up -d
 docker compose ps
 ```
 
-4. UI: http://localhost:8080 — user `airflow` / password `airflow` (local defaults in `.env`). New DAGs start **paused**.
-5. Stop:
+4. UI: http://localhost:8080 — user `airflow` / password `airflow` (local defaults). New DAGs start **paused**.
+5. For `import_apple_calendar` (Remote Login, SSH key, `source_config.json`): see [dags/import_apple_calendar/README.md](dags/import_apple_calendar/README.md).
+6. Stop:
 
 ```bash
 docker compose down
 ```
 
 Wipe the metadata DB as well: `docker compose down --volumes --remove-orphans`.
-
-If Docker Desktop is **paused**, unpause it before `up` or triggering DAGs.
 
 More services, uv, and `requirements.txt` vs lockfile: [airflow.deployment/docker-compose/README.md](airflow.deployment/docker-compose/README.md). Official guide: [Running Airflow in Docker (2.10.5)](https://airflow.apache.org/docs/apache-airflow/2.10.5/howto/docker-compose/index.html).
 

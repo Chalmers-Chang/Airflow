@@ -35,7 +35,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def scan_and_import():
-    dry_run_value = (Variable.get(appsetting.DRY_RUN_VARIABLE, default_var="1") or "1").strip()
+    dry_run_value = (Variable.get(appsetting.DRY_RUN_VARIABLE, default_var="0") or "0").strip()
     dry_run = dry_run_value != "0"
     LOGGER.info("IMPORT_APPLE_CALENDAR_DRY_RUN=%r -> dry_run=%s", dry_run_value, dry_run)
     config = appsetting.load_source_config()
@@ -77,7 +77,7 @@ def _import_source(source, dry_run):
             )
     changed, removed = changed_and_removed(snapshot, state.get("files"))
     if not changed and not removed:
-        LOGGER.info("source %s: file names/hashes unchanged, skip", source_id)
+        LOGGER.info("source %s: file names/mtimes unchanged, skip", source_id)
         return {
             "source_id": source_id,
             "scan_dir": scan_dir,
@@ -123,23 +123,34 @@ def _import_source(source, dry_run):
         event_count += len(parsed["events"])
         skipped += parsed.get("skipped") or 0
         LOGGER.info(
-            "parsed %s crew=%s months=%s events=%s skipped=%s delete_uids=%s sha256=%s",
+            "parsed %s crew=%s months=%s events=%s skipped=%s delete_uids=%s mtime=%s",
             item["name"],
             crew_id,
             months,
             len(parsed["events"]),
             parsed.get("skipped") or 0,
             len(uids),
-            parsed["file_sha256"],
+            item["mtime"],
         )
         result = upsert_events(source, password, parsed, uids, dry_run)
         written += result["written"]
         deleted += result.get("deleted") or 0
         dry_run_events += result.get("dry_run") or 0
+        if dry_run:
+            continue
+        expected = len(parsed["events"])
+        if result["written"] != expected:
+            LOGGER.warning(
+                "skip mtime for %s: written=%s expected=%s; retry next run",
+                item["name"],
+                result["written"],
+                expected,
+            )
+            continue
         events_state = drop_uids(events_state, uids)
         events_state.extend(result.get("event_records") or [])
         files_state[item["name"]] = file_entry(
-            item["name"], item["sha256"], crew_id, months
+            item["name"], item["mtime"], crew_id, months
         )
 
     if not dry_run:

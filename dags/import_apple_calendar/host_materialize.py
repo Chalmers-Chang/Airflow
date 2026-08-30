@@ -11,6 +11,18 @@ def request_materialize(container_paths):
     paths = [path for path in container_paths or [] if path]
     if not paths:
         return True
+    if not appsetting.HOST_SSH_USER:
+        LOGGER.error(
+            "IMPORT_APPLE_CALENDAR_SSH_USER is empty; set your macOS username in "
+            "airflow.deployment/docker-compose/.env (see .env.example) and recreate containers"
+        )
+        return False
+    if not appsetting.HOST_MATERIALIZE_SCRIPT:
+        LOGGER.error(
+            "IMPORT_APPLE_CALENDAR_MATERIALIZE_SCRIPT is empty; set the absolute host path to "
+            "scripts/materialize_icloud.sh in .env (see .env.example) and recreate containers"
+        )
+        return False
     key = appsetting.ssh_key_path()
     if not os.path.isfile(key):
         LOGGER.error(

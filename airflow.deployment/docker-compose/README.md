@@ -53,8 +53,17 @@ Official resource floor: 4 GB RAM, 2 CPUs, 10 GB disk. On macOS, `AIRFLOW_UID` i
 
 ## Setup
 
-1. Docker Desktop is running.
-2. [uv](https://docs.astral.sh/uv/) is installed for Python 3.8 and the lockfile:
+1. Docker Desktop is running (not paused), with at least 4 GB RAM / 2 CPUs / 10 GB disk.
+2. Create local env from the template (**required** — empty `ICLOUD_AIRFLOW_DIR` breaks compose):
+
+```bash
+cd airflow.deployment/docker-compose
+cp .env.example .env
+# edit AIRFLOW_UID (id -u), ICLOUD_AIRFLOW_DIR, IMPORT_APPLE_CALENDAR_SSH_*
+```
+
+3. For `import_apple_calendar`, also complete macOS Remote Login + `scripts/setup_host_ssh.sh` and copy `source_config.json.example` → `source_config.json`. Full steps: [dags/import_apple_calendar/README.md](../../dags/import_apple_calendar/README.md).
+4. Optional local Python tooling with [uv](https://docs.astral.sh/uv/):
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
