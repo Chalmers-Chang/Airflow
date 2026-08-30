@@ -18,8 +18,12 @@ PASSWORD_VARIABLE = "ICLOUD_CALDAV_PASSWORD"
 DRY_RUN_VARIABLE = "IMPORT_APPLE_CALENDAR_DRY_RUN"
 
 ICLOUD_CALDAV_URL = "https://caldav.icloud.com/"
-DAGS_DIR = os.path.dirname(PACKAGE_DIR)
-STATE_DIR = os.path.join(DAGS_DIR, "logs", "import_apple_calendar")
+
+# Persistent machine-local data (outside the git checkout). Same path on host and in containers.
+# Host: create once under /opt/data/airflow. Compose mounts AIRFLOW_DATA_DIR → /opt/data/airflow.
+DATA_ROOT = (os.environ.get("AIRFLOW_DATA_DIR") or "/opt/data/airflow").strip() or "/opt/data/airflow"
+DATA_DIR = os.path.join(DATA_ROOT, "import_apple_calendar")
+STATE_DIR = DATA_DIR
 
 # Mac host username and absolute path to materialize_icloud.sh (SSH runs on the host).
 # Set both in airflow.deployment/docker-compose/.env (see .env.example). No machine-specific defaults.
@@ -34,7 +38,7 @@ MATERIALIZE_SSH_TIMEOUT = MATERIALIZE_WAIT_SEC * MATERIALIZE_WAIT_TIMES + 20
 
 
 def source_config_path():
-    return os.path.join(CONFIG_DIR, SOURCE_CONFIG_FILE)
+    return os.path.join(DATA_DIR, SOURCE_CONFIG_FILE)
 
 
 def load_source_config():
@@ -42,8 +46,10 @@ def load_source_config():
     if not os.path.isfile(path):
         example = os.path.join(CONFIG_DIR, "source_config.json.example")
         raise FileNotFoundError(
-            "Missing {0}. Copy {1} to source_config.json and fill in your Apple ID email "
-            "and calendar settings.".format(path, example)
+            "Missing {0}. Copy {1} to that path and fill in your Apple ID email "
+            "and calendar settings (see README; data lives outside the git repo).".format(
+                path, example
+            )
         )
     with open(path, "r", encoding="utf-8") as handle:
         return json.load(handle)
@@ -60,7 +66,7 @@ def state_path(source_id):
 
 
 def ssh_dir():
-    return os.path.join(STATE_DIR, "ssh")
+    return os.path.join(DATA_DIR, "ssh")
 
 
 def ssh_key_path():

@@ -6,6 +6,21 @@ v1 scans an iCloud Drive folder via `/opt/airflow/icloud` (compose `ICLOUD_AIRFL
 
 This DAG only works on a **Mac host** with Docker Desktop (iCloud Drive + Remote Login). It is local-dev only.
 
+## Persistent data (survives `git pull`)
+
+Local setup is **outside the git repo**. Compose mounts your host `AIRFLOW_DATA_DIR` at **`/opt/data/airflow`** inside every container.
+
+| What | Host (default) | Inside container |
+|---|---|---|
+| Data root | `~/Library/Application Support/airflow` | `/opt/data/airflow` |
+| Calendar sources | `…/import_apple_calendar/source_config.json` | `/opt/data/airflow/import_apple_calendar/source_config.json` |
+| Import state (mtime / UIDs) | `…/import_apple_calendar/<source_id>.json` | same under `/opt/data/airflow/…` |
+| SSH key for materialize | `…/import_apple_calendar/ssh/id_ed25519` | same under `/opt/data/airflow/…` |
+
+Docker Desktop can bind-mount paths under your home without extra File Sharing. Prefer the default above. If you insist on `/opt/data/airflow` on the host, add `/opt/data` under **Docker Desktop → Settings → Resources → File Sharing** first.
+
+`scripts/setup_host_ssh.sh` creates the directory tree, copies `source_config.json.example` if missing, and installs the SSH key.
+
 ## New machine checklist (do in order)
 
 Work from the **repo root** unless a step says otherwise.
@@ -28,6 +43,7 @@ Edit `.env`:
 | Variable | How to set |
 |---|---|
 | `AIRFLOW_UID` | Run `id -u` on this Mac (often `501`) |
+| `AIRFLOW_DATA_DIR` | Host path for persistent data (default in example: `~/Library/Application Support/airflow`) |
 | `ICLOUD_AIRFLOW_DIR` | Absolute path to your iCloud Drive `airflow` folder (see §3) |
 | `IMPORT_APPLE_CALENDAR_SSH_USER` | Your macOS short username (`whoami`) |
 | `IMPORT_APPLE_CALENDAR_MATERIALIZE_SCRIPT` | Absolute path to `dags/import_apple_calendar/scripts/materialize_icloud.sh` on this Mac |
@@ -36,13 +52,15 @@ Empty `ICLOUD_AIRFLOW_DIR` causes:
 
 `invalid spec: :/opt/airflow/icloud:ro: empty section between colons`
 
-After editing `.env`, always recreate containers so env reaches workers:
+### 3. Bootstrap persistent data + SSH (once per Mac)
 
 ```bash
-docker compose up -d
+bash dags/import_apple_calendar/scripts/setup_host_ssh.sh
 ```
 
-### 3. iCloud Drive folder (PDF source)
+Then edit the created `source_config.json` under `AIRFLOW_DATA_DIR` (Apple ID email, `calendar_name`, etc.).
+
+### 4. iCloud Drive folder (PDF source)
 
 1. In Finder, open **iCloud Drive** and create (or sync) a folder named `airflow`.
 2. Put crew PDFs under `airflow/data/<person>/`, e.g. `airflow/data/britney.duty.schedule/*.pdf`.
@@ -52,45 +70,28 @@ docker compose up -d
 
 4. That path is what you put in `ICLOUD_AIRFLOW_DIR`. Inside containers it is `/opt/airflow/icloud` (read-only).
 
-**Cloud-only / dataless files:** Docker cannot download iCloud placeholders. If a PDF shows as cloud-only (Finder cloud icon, or `ls -lO` shows `dataless`), the DAG will SSH to this Mac and run `scripts/materialize_icloud.sh`. That needs the next section.
+**Cloud-only / dataless files:** Docker cannot download iCloud placeholders. If a PDF shows as cloud-only (Finder cloud icon, or `ls -lO` shows `dataless`), the DAG will SSH to this Mac and run `scripts/materialize_icloud.sh`.
 
-### 4. macOS permissions (Remote Login + SSH key)
+### 5. macOS permissions (Remote Login)
 
 You must do this yourself; no agent is required.
 
 1. **System Settings → General → Sharing → Remote Login → On**
    - Allow access for your user (the same name as `IMPORT_APPLE_CALENDAR_SSH_USER`)
    - Confirm port 22 is listening: `nc -z 127.0.0.1 22 && echo ok`
-2. From the **repo root**, create the worker key and append it to your `~/.ssh/authorized_keys`:
-
-```bash
-bash dags/import_apple_calendar/scripts/setup_host_ssh.sh
-```
-
-3. The script prints the `IMPORT_APPLE_CALENDAR_*` lines to put in `.env` if you have not set them yet. Then:
+2. Recreate containers after `.env` / data bootstrap:
 
 ```bash
 cd airflow.deployment/docker-compose
 docker compose up -d
 ```
 
-4. Optional smoke test (same key the worker uses):
+3. Optional smoke test:
 
 ```bash
-KEY=dags/logs/import_apple_calendar/ssh/id_ed25519
+KEY="$HOME/Library/Application Support/airflow/import_apple_calendar/ssh/id_ed25519"
 ssh -i "$KEY" -o BatchMode=yes -o IdentitiesOnly=yes "$(whoami)"@127.0.0.1 'echo ok'
 ```
-
-Keys live under `dags/logs/import_apple_calendar/ssh/` (gitignored). Never commit them.
-
-### 5. Local calendar config (not committed)
-
-```bash
-cp dags/import_apple_calendar/config/source_config.json.example \
-   dags/import_apple_calendar/config/source_config.json
-```
-
-Edit `source_config.json`: set `icloud_account_email`, `calendar_name` (exact Calendar.app sidebar name), `scan_dir`, etc. This file is gitignored because it contains account identifiers.
 
 ### 6. Apple ID / Calendar / Airflow Variables
 
@@ -114,13 +115,14 @@ Edit `source_config.json`: set `icloud_account_email`, `calendar_name` (exact Ca
 | Symptom | Fix |
 |---|---|
 | `invalid spec: :/opt/airflow/icloud:ro` | Copy `.env.example` → `.env` and set `ICLOUD_AIRFLOW_DIR` |
+| `Mounts denied: /opt/data/airflow is not shared` | Use home-based `AIRFLOW_DATA_DIR` (default), or add `/opt/data` in Docker File Sharing |
 | `Errno 35` / `Input/output error` / cloud-only PDF | Enable Remote Login; run `setup_host_ssh.sh`; set SSH env in `.env`; recreate compose |
 | `no SSH key at .../ssh/id_ed25519` | Run `scripts/setup_host_ssh.sh` |
 | `airflow-worker not running` from materialize (workers actually up) | Fixed in script PATH; pull latest `materialize_icloud.sh`. SSH sessions need `/usr/local/bin` on PATH |
 | `IMPORT_APPLE_CALENDAR_SSH_USER is empty` | Set it in `.env`, then `docker compose up -d` |
 | Connection refused to port 22 | Remote Login still off, or Docker Desktop paused |
 | Every run re-parses all PDFs | Dry-run does not save state; set `IMPORT_APPLE_CALENDAR_DRY_RUN=0` after a good write |
-| Missing `source_config.json` | Copy from `source_config.json.example` |
+| Missing `source_config.json` | Run `setup_host_ssh.sh`, then edit the file under `AIRFLOW_DATA_DIR` |
 
 ## `source_config.json`
 
@@ -144,24 +146,29 @@ Event UID is `import-apple-calendar-{source_id}-{crew_id}-{date}`, so reruns upd
 ## Layout
 
 ```
-import_apple_calendar/
-├── import_apple_calendar.py   # DAG
-├── calendar_client.py         # iCloud CalDAV upsert
+import_apple_calendar/          # in git
+├── import_apple_calendar.py
+├── calendar_client.py
 ├── config/
 │   ├── appsetting.py
-│   ├── source_config.json.example  # committed template
-│   ├── source_config.json          # local only (gitignored)
+│   ├── source_config.json.example
 │   └── secret.py
 ├── parsers/crew_report.py
 ├── host_materialize.py
 ├── scripts/materialize_icloud.sh
 ├── scripts/setup_host_ssh.sh
 └── example/
+
+# outside git — AIRFLOW_DATA_DIR (container: /opt/data/airflow)
+import_apple_calendar/
+├── source_config.json
+├── <source_id>.json            # state
+└── ssh/id_ed25519
 ```
 
 `.airflowignore` hides `config/`, `parsers/`, `example/`, `scripts/`, `host_materialize.py`. The DAG file stays at this folder’s root.
 
-Written event UIDs are stored in `dags/logs/import_apple_calendar/{source_id}.json` with `crew_id` and `month`. Only **new or mtime-updated files** are processed. `mtime` is recorded only after a successful calendar write (not on dry-run). Delete is limited to that file’s **Crew ID + months present in the PDF**. Unchanged mtimes are left alone.
+Written event UIDs / mtimes live under `/opt/data/airflow/import_apple_calendar/`. Only **new or mtime-updated files** are processed. `mtime` is recorded only after a successful calendar write (not on dry-run).
 
 Schedule is every 5 minutes UTC (`*/5 * * * *`). `max_active_runs=1`.
 

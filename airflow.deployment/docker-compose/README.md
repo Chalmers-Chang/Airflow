@@ -47,6 +47,7 @@ Package versions are managed with **uv** at the repo root (`pyproject.toml` + `u
 | `config/` | `/opt/airflow/config` |
 | `plugins/` | `/opt/airflow/plugins` |
 | iCloud `…/CloudDocs/airflow` (`ICLOUD_AIRFLOW_DIR`) | `/opt/airflow/icloud` (read-only) |
+| host `AIRFLOW_DATA_DIR` (config / SSH / import state) | `/opt/data/airflow` |
 | volume `postgres-db-volume` | Postgres data |
 
 Official resource floor: 4 GB RAM, 2 CPUs, 10 GB disk. On macOS, `AIRFLOW_UID` is the host uid (`501` here) so `logs/` is not owned by root.
@@ -59,10 +60,11 @@ Official resource floor: 4 GB RAM, 2 CPUs, 10 GB disk. On macOS, `AIRFLOW_UID` i
 ```bash
 cd airflow.deployment/docker-compose
 cp .env.example .env
-# edit AIRFLOW_UID (id -u), ICLOUD_AIRFLOW_DIR, IMPORT_APPLE_CALENDAR_SSH_*
+# edit AIRFLOW_UID (id -u), AIRFLOW_DATA_DIR, ICLOUD_AIRFLOW_DIR, IMPORT_APPLE_CALENDAR_SSH_*
+bash ../../dags/import_apple_calendar/scripts/setup_host_ssh.sh
 ```
 
-3. For `import_apple_calendar`, also complete macOS Remote Login + `scripts/setup_host_ssh.sh` and copy `source_config.json.example` → `source_config.json`. Full steps: [dags/import_apple_calendar/README.md](../../dags/import_apple_calendar/README.md).
+3. For `import_apple_calendar`, also complete macOS Remote Login. Full steps: [dags/import_apple_calendar/README.md](../../dags/import_apple_calendar/README.md).
 4. Optional local Python tooling with [uv](https://docs.astral.sh/uv/):
 
 ```bash
