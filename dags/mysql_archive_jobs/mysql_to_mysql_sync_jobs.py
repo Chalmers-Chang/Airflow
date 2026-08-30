@@ -9,6 +9,7 @@ import zlib
 from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.python import BranchPythonOperator, PythonOperator
+from common.variables import ensure_all_project_variables
 from airflow.utils.dates import days_ago
 from airflow.utils.trigger_rule import TriggerRule
 
@@ -1144,6 +1145,8 @@ def break_msg(current_etl_task_connection_config):
     break_msg = f"{current_etl_task_connection_config.source_db}.{current_etl_task_connection_config.source_table} not found, check next task"
     send_msg_to_multiple_slack_channel(break_msg)
 
+
+ensure_all_project_variables()
 
 airflow_task_id = Variable.get("airflow_task_id")
 etl_task_table = appsetting.etl_task_table_name(airflow_task_id)

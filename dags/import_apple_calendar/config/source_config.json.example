@@ -1,0 +1,18 @@
+{
+  "sources": [
+    {
+      "id": "britney_duty",
+      "crew_id": "YOUR_CREW_ID",
+      "enabled": true,
+      "display_name": "Britney duty",
+      "scan_dir": "/opt/airflow/icloud/data/britney.duty.schedule",
+      "file_glob": "*.pdf",
+      "parser": "crew_report",
+      "icloud_account_email": "your_apple_id@example.com",
+      "password_variable": "ICLOUD_CALDAV_PASSWORD",
+      "calendar_name": "Britney duty",
+      "timezone": "Asia/Taipei",
+      "event_title_prefix": "[Britney]"
+    }
+  ]
+}

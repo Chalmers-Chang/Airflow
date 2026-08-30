@@ -1,0 +1,5 @@
+# Extra pip packages for the Airflow container (not already in apache/airflow:2.10.5).
+# Source of truth for versions: repo-root pyproject.toml + uv.lock
+pypdf==4.3.1
+caldav==1.3.9
+icalendar==5.0.14
